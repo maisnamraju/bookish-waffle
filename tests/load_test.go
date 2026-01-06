@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"coupon-system/internal/model"
-	"coupon-system/internal/repository"
+	"coupon-system/pkg/config"
 	"coupon-system/pkg/database"
 	"encoding/json"
 	"fmt"
@@ -14,14 +14,13 @@ import (
 	"testing"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-const (
-	testMongoURI = "mongodb://localhost:27017"
-	testDBName   = "coupon_system_test"
-	baseURL      = "http://localhost:8080"
+var (
+	testMongoURI = config.GetEnv("MONGO_URI", "mongodb://localhost:27017")
+	testDBName   = config.GetEnv("MONGO_DB", "coupon_system")
+	baseURL      = config.GetEnv("BASE_URL", "http://localhost:8080")
 )
 
 // TestResult tracks the result of a claim request
@@ -62,7 +61,7 @@ func setupTestDatabase(t *testing.T) func() {
 	// Flash Sale coupon - 5 items in stock
 	flashSaleCoupon := &model.Coupon{
 		ID:              primitive.NewObjectID(),
-		Name:            "FLASH_SALE_2024",
+		Name:            "FLASH_SALE_2026",
 		Amount:          500,
 		RemainingAmount: 5,
 		IsActive:        true,
@@ -92,9 +91,7 @@ func setupTestDatabase(t *testing.T) func() {
 	}
 
 	t.Logf("✅ Database cleaned and seeded successfully")
-	t.Logf("   - FLASH_SALE_2024: 5 items in stock")
-	t.Logf("   - PROMO_SUPER: 100 items in stock")
-
+	
 	// Return cleanup function
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -120,7 +117,7 @@ func claimCoupon(baseURL, userID, couponName string) TestResult {
 	}
 
 	resp, err := http.Post(
-		fmt.Sprintf("%s/coupons/claim", baseURL),
+		fmt.Sprintf("%s/api/coupons/claim", baseURL),
 		"application/json",
 		bytes.NewBuffer(jsonData),
 	)
@@ -150,7 +147,7 @@ func claimCoupon(baseURL, userID, couponName string) TestResult {
 
 // getCouponDetails retrieves coupon details from the API
 func getCouponDetails(baseURL, couponName string) (*model.CouponDetailsResponse, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/coupons/%s", baseURL, couponName))
+	resp, err := http.Get(fmt.Sprintf("%s/api/coupons/%s", baseURL, couponName))
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +192,7 @@ func TestFlashSaleAttack(t *testing.T) {
 	cleanup := setupTestDatabase(t)
 	defer cleanup()
 
-	couponName := "FLASH_SALE_2024"
+	couponName := "FLASH_SALE_2026"
 	concurrentRequests := 50
 	expectedSuccess := 5
 	expectedNoStock := 45
@@ -210,7 +207,7 @@ func TestFlashSaleAttack(t *testing.T) {
 		results      []TestResult
 	)
 
-	t.Logf("🚀 Starting Flash Sale Attack Test")
+	t.Logf("Starting Flash Sale Attack Test")
 	t.Logf("   Coupon: %s", couponName)
 	t.Logf("   Concurrent Requests: %d", concurrentRequests)
 	t.Logf("   Expected Success: %d", expectedSuccess)
@@ -244,7 +241,7 @@ func TestFlashSaleAttack(t *testing.T) {
 	}
 
 	wg.Wait()
-	duration := time.Since(start)
+	_ = time.Since(start) // duration tracked but not logged
 
 	// Wait a bit for all operations to complete
 	time.Sleep(500 * time.Millisecond)
@@ -321,7 +318,7 @@ func TestDoubleDipAttack(t *testing.T) {
 		results      []TestResult
 	)
 
-	t.Logf("🚀 Starting Double Dip Attack Test")
+	t.Logf("Starting Double Dip Attack Test")
 	t.Logf("   Coupon: %s", couponName)
 	t.Logf("   User ID: %s", userID)
 	t.Logf("   Concurrent Requests: %d", concurrentRequests)
@@ -352,7 +349,7 @@ func TestDoubleDipAttack(t *testing.T) {
 	}
 
 	wg.Wait()
-	duration := time.Since(start)
+	_ = time.Since(start) // duration tracked but not logged
 
 	// Wait a bit for all operations to complete
 	time.Sleep(500 * time.Millisecond)

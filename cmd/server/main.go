@@ -5,6 +5,7 @@ import (
 	"coupon-system/internal/model"
 	"coupon-system/internal/repository"
 	"coupon-system/internal/service"
+	"coupon-system/pkg/config"
 	"coupon-system/pkg/database"
 	"log"
 	"net/http"
@@ -18,9 +19,9 @@ import (
 
 func main() {
 	// Get configuration from environment variables
-	mongoURI := getEnv("MONGO_URI", "mongodb://localhost:27017")
-	dbName := getEnv("MONGO_DB", "coupon_system")
-	port := getEnv("PORT", "8080")
+	mongoURI := config.GetEnv("MONGO_URI", "mongodb://localhost:27017")
+	dbName := config.GetEnv("MONGO_DB", "coupon_system")
+	port := config.GetEnv("PORT", "8080")
 
 	// Connect to MongoDB
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -42,7 +43,7 @@ func main() {
 	couponRepo := repository.NewCouponRepository(mongoDB.Database)
 	claimRepo := repository.NewClaimRepository(mongoDB.Database)
 
-	// Initialize service
+	// Initialize service (no transaction dependency - uses atomic upsert pattern)
 	svc := service.NewCouponService(couponRepo, claimRepo)
 
 	// Setup Gin router
@@ -92,10 +93,38 @@ func setupRouter(svc *service.CouponService) *gin.Engine {
 	})
 
 	// API routes
-	router.POST("/coupons/claim", claimCouponHandler(svc))
-	router.GET("/coupons/:name", getCouponDetailsHandler(svc))
+	api := router.Group("/api")
+	{
+		api.POST("/coupons", createCouponHandler(svc))
+		api.POST("/coupons/claim", claimCouponHandler(svc))
+		api.GET("/coupons/:name", getCouponDetailsHandler(svc))
+	}
 
 	return router
+}
+
+// createCouponHandler handles POST /coupons
+func createCouponHandler(svc *service.CouponService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req model.CreateCouponRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+
+		coupon, err := svc.CreateCoupon(c.Request.Context(), &req)
+		if err != nil {
+			switch err {
+			case service.ErrCouponAlreadyExists:
+				c.JSON(http.StatusConflict, gin.H{"error": "coupon already exists"})
+			default:
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create coupon"})
+			}
+			return
+		}
+
+		c.JSON(http.StatusCreated, coupon)
+	}
 }
 
 // claimCouponHandler handles POST /api/coupons/claim
@@ -149,12 +178,5 @@ func getCouponDetailsHandler(svc *service.CouponService) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, details)
 	}
-}
-
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
 }
 

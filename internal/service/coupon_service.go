@@ -4,15 +4,16 @@ import (
 	"context"
 	"coupon-system/internal/model"
 	"coupon-system/internal/repository"
-	"errors"
+	apperrors "coupon-system/pkg/errors"
 	"time"
 )
 
+// Re-export errors for backward compatibility with handlers
 var (
-	ErrCouponNotFound    = errors.New("coupon not found")
-	ErrCouponAlreadyExists = errors.New("coupon already exists")
-	ErrAlreadyClaimed    = errors.New("coupon already claimed by this user")
-	ErrNoStock           = errors.New("no stock available")
+	ErrCouponNotFound      = apperrors.ErrCouponNotFound
+	ErrCouponAlreadyExists = apperrors.ErrCouponAlreadyExists
+	ErrAlreadyClaimed      = apperrors.ErrAlreadyClaimed
+	ErrNoStock             = apperrors.ErrNoStock
 )
 
 // CouponService handles business logic for coupons
@@ -30,26 +31,17 @@ func NewCouponService(couponRepo repository.CouponRepository, claimRepo reposito
 }
 
 // ClaimCoupon attempts to claim a coupon for a user
+// Uses atomic upsert pattern to prevent double-dip attacks without requiring transactions
 func (s *CouponService) ClaimCoupon(ctx context.Context, req *model.ClaimCouponRequest) error {
+	// Get coupon (read-only operation)
 	coupon, err := s.couponRepo.GetCouponByName(ctx, req.CouponName)
 	if err != nil {
 		return err
 	}
 
-	hasClaimed, err := s.claimRepo.HasUserClaimed(ctx, req.UserID, coupon.ID)
-	if err != nil {
-		return err
-	}
-	if hasClaimed {
-		return ErrAlreadyClaimed
-	}
-
-	// Atomically decrement stock
-	if err := s.couponRepo.DecrementStock(ctx, coupon.ID, 1); err != nil {
-		return err
-	}
-
-	// Create claim record
+	// Step 1: Atomically claim FIRST using upsert pattern
+	// This is idempotent - 10 concurrent requests result in exactly 1 insert
+	// No race window exists because MongoDB's upsert is atomic
 	claim := &model.Claim{
 		UserID:     req.UserID,
 		CouponID:   coupon.ID,
@@ -57,11 +49,51 @@ func (s *CouponService) ClaimCoupon(ctx context.Context, req *model.ClaimCouponR
 		CreatedAt:  time.Now(),
 	}
 
-	if err := s.claimRepo.CreateClaim(ctx, claim); err != nil {
+	created, err := s.claimRepo.CreateClaimIfNotExists(ctx, claim)
+	if err != nil {
+		return err // Already claimed or DB error - no stock touched
+	}
+	if !created {
+		return ErrAlreadyClaimed
+	}
+
+	// Step 2: Decrement stock (claim is now secured)
+	// If this fails, we need to rollback the claim we just created
+	if err := s.couponRepo.DecrementStock(ctx, coupon.ID, 1); err != nil {
+		// Compensating action: remove the claim we just created
+		_ = s.claimRepo.DeleteClaim(ctx, req.UserID, coupon.ID)
 		return err
 	}
 
 	return nil
+}
+
+// CreateCoupon creates a new coupon
+func (s *CouponService) CreateCoupon(ctx context.Context, req *model.CreateCouponRequest) (*model.Coupon, error) {
+	// Parse expiration date if provided, otherwise default to 30 days
+	expiresAt := time.Now().Add(30 * 24 * time.Hour)
+	if req.ExpiresAt != "" {
+		parsed, err := time.Parse(time.RFC3339, req.ExpiresAt)
+		if err == nil {
+			expiresAt = parsed
+		}
+	}
+
+	coupon := &model.Coupon{
+		Name:            req.Name,
+		Amount:          req.Amount,
+		RemainingAmount: req.Amount,
+		IsActive:        true,
+		CreatedAt:       time.Now(),
+		ExpiresAt:       expiresAt,
+		UpdatedAt:       time.Now(),
+	}
+
+	if err := s.couponRepo.CreateCoupon(ctx, coupon); err != nil {
+		return nil, err
+	}
+
+	return coupon, nil
 }
 
 // GetCouponDetails retrieves coupon details including claim history

@@ -33,6 +33,13 @@ type ClaimCouponRequest struct {
 	CouponName string `json:"coupon_name" binding:"required"`
 }
 
+// CreateCouponRequest represents the request to create a new coupon
+type CreateCouponRequest struct {
+	Name      string `json:"name" binding:"required"`
+	Amount    int32  `json:"amount" binding:"required,gt=0"`
+	ExpiresAt string `json:"expires_at"` // Optional, RFC3339 format
+}
+
 // CouponDetailsResponse represents the response for coupon details
 type CouponDetailsResponse struct {
 	Name           string   `json:"name"`
@@ -40,4 +47,3 @@ type CouponDetailsResponse struct {
 	RemainingAmount int32   `json:"remaining_amount"` // in cents
 	ClaimedBy      []string `json:"claimed_by"`
 }
-

@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 	"coupon-system/internal/model"
-	"coupon-system/internal/service"
+	apperrors "coupon-system/pkg/errors"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -27,7 +27,7 @@ func (r *mongodbCouponRepository) CreateCoupon(ctx context.Context, coupon *mode
 	_, err := r.collection.InsertOne(ctx, coupon)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			return service.ErrCouponAlreadyExists
+			return apperrors.ErrCouponAlreadyExists
 		}
 		return err
 	}
@@ -41,7 +41,7 @@ func (r *mongodbCouponRepository) GetCouponByName(ctx context.Context, name stri
 	err := r.collection.FindOne(ctx, bson.M{"name": name}).Decode(&coupon)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return nil, service.ErrCouponNotFound
+			return nil, apperrors.ErrCouponNotFound
 		}
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (r *mongodbCouponRepository) DecrementStock(ctx context.Context, couponID i
 	updateResult := r.collection.FindOneAndUpdate(
 		ctx,
 		bson.M{
-			"_id":             couponID,
+			"_id":              couponID,
 			"remaining_amount": bson.M{"$gte": amount}, // Only update if stock >= amount
 		},
 		bson.M{"$inc": bson.M{"remaining_amount": -amount}}, // Atomic decrement
@@ -65,7 +65,7 @@ func (r *mongodbCouponRepository) DecrementStock(ctx context.Context, couponID i
 
 	if updateResult.Err() != nil {
 		if updateResult.Err() == mongo.ErrNoDocuments {
-			return service.ErrNoStock
+			return apperrors.ErrNoStock
 		}
 		return updateResult.Err()
 	}
