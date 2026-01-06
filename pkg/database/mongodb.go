@@ -16,6 +16,11 @@ type MongoDB struct {
 	Database *mongo.Database
 }
 
+// StartSession starts a new MongoDB session for transactions
+func (m *MongoDB) StartSession() (mongo.Session, error) {
+	return m.Client.StartSession()
+}
+
 // Connect establishes a connection to MongoDB
 func Connect(ctx context.Context, uri, dbName string) (*MongoDB, error) {
 	clientOptions := options.Client().ApplyURI(uri)
