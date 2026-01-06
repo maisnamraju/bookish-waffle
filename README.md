@@ -1,18 +1,6 @@
-# Scalable Coupon System API
-
-A high-performance REST API for a "Flash Sale" Coupon System built with Golang, MongoDB, and Docker. The system handles high concurrency, guarantees strict data consistency, and prevents both overselling and duplicate claims.
-
-## Features
-
-- ✅ **High Concurrency**: Handles 50+ concurrent requests with atomic operations
-- ✅ **Data Consistency**: MongoDB transactions ensure ACID guarantees
-- ✅ **Double-Dip Protection**: Unique compound index prevents users from claiming the same coupon twice
-- ✅ **Flash Sale Protection**: Atomic stock decrement prevents overselling
-- ✅ **Docker Deployment**: One-command deployment with Docker Compose
-
 ## Prerequisites
 
-- **Docker Desktop** (or Docker Engine + Docker Compose)
+- **Docker** (or Docker Engine + Docker Compose)
 - **Go 1.21+** (for local development)
 - **MongoDB Database Tools** (for seeding data, optional)
 
