@@ -1,0 +1,29 @@
+[
+  {
+    "name": "FLASH_SALE_2024",
+    "amount": 500,
+    "remaining_amount": 5,
+    "is_active": true,
+    "created_at": {"$date": "2024-01-15T10:00:00Z"},
+    "expires_at": {"$date": "2024-12-31T23:59:59Z"},
+    "updated_at": {"$date": "2024-01-15T10:00:00Z"}
+  },
+  {
+    "name": "PROMO_SUPER",
+    "amount": 10000,
+    "remaining_amount": 100,
+    "is_active": true,
+    "created_at": {"$date": "2024-01-10T08:00:00Z"},
+    "expires_at": {"$date": "2024-12-31T23:59:59Z"},
+    "updated_at": {"$date": "2024-01-10T08:00:00Z"}
+  },
+  {
+    "name": "TEST_COUPON",
+    "amount": 1000,
+    "remaining_amount": 0,
+    "is_active": false,
+    "created_at": {"$date": "2024-01-01T00:00:00Z"},
+    "expires_at": {"$date": "2024-01-31T23:59:59Z"},
+    "updated_at": {"$date": "2024-01-01T00:00:00Z"}
+  }
+]
